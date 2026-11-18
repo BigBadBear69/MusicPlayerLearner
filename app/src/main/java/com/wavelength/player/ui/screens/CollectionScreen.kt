@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -32,7 +33,9 @@ import com.wavelength.player.data.db.SongEntity
 import com.wavelength.player.ui.components.AlbumArt
 import com.wavelength.player.ui.components.ArtImage
 import com.wavelength.player.ui.components.PlayShuffleBar
+import com.wavelength.player.ui.components.SongMenu
 import com.wavelength.player.ui.components.SongRow
+import com.wavelength.player.ui.components.art
 import com.wavelength.player.ui.formatDuration
 import com.wavelength.player.ui.songCount
 
@@ -45,7 +48,8 @@ fun CollectionScreen(
     cover: AlbumArt?,
     numbered: Boolean,
     currentSongId: Long?,
-    onPlay: (List<SongEntity>, Int, Boolean) -> Unit,
+    onPlay: (List<SongEntity>, Int?, Boolean) -> Unit,
+    onMore: (SongMenu) -> Unit,
     onBack: () -> Unit,
     contentPadding: PaddingValues,
 ) {
@@ -53,6 +57,11 @@ fun CollectionScreen(
         TopAppBar(
             title = { Text(title, maxLines = 1, overflow = TextOverflow.Ellipsis) },
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
+            actions = {
+                IconButton(onClick = { onMore(SongMenu(songs, title, songCount(songs.size), cover ?: songs.firstOrNull()?.art())) }) {
+                    Icon(Icons.Rounded.MoreVert, "More options")
+                }
+            },
         )
         LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
             item {
@@ -69,13 +78,14 @@ fun CollectionScreen(
                         textAlign = TextAlign.Center,
                     )
                 }
-                PlayShuffleBar(onPlay = { onPlay(songs, 0, false) }, onShuffle = { onPlay(songs, 0, true) })
+                PlayShuffleBar(onPlay = { onPlay(songs, 0, false) }, onShuffle = { onPlay(songs, null, true) })
             }
             itemsIndexed(songs, key = { _, s -> s.id }) { i, s ->
                 SongRow(
                     s,
                     s.id == currentSongId,
                     onClick = { onPlay(songs, i, false) },
+                    onMore = { onMore(s.menu()) },
                     leadingNumber = if (numbered) (s.trackNumber.takeIf { it > 0 } ?: (i + 1)) else null,
                 )
             }

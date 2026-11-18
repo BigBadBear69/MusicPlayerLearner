@@ -88,7 +88,7 @@ For every song, from your phone or from Spotify, Wavelength records:
 |---|---|---|
 | 0 | ✅ Project setup + automatic APK builds published to **GitHub Releases** | Release signing secrets (see below) |
 | 1 | ✅ Library scan, browse and search, background playback | No |
-| 2 | Playlists, queue, smart shuffle and loop | No |
+| 2 | ✅ Playlists, queue, smart shuffle and loop | No |
 | 3 | Listening tracker, Affinity Score, stats | No |
 | 4 | Discover (Last.fm, Deezer, ListenBrainz), thumbs, Wishlist | Last.fm API key, entered in app settings |
 | 5 | Spotify playback inside Wavelength | Spotify Premium + Spotify Client ID |

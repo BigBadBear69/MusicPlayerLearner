@@ -7,6 +7,7 @@ import coil3.SingletonImageLoader
 import coil3.request.crossfade
 import com.wavelength.player.data.db.WavelengthDatabase
 import com.wavelength.player.data.library.LibraryRepository
+import com.wavelength.player.data.library.PlaylistRepository
 import com.wavelength.player.ui.components.AlbumArtFetcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +17,7 @@ class WavelengthApp : Application(), SingletonImageLoader.Factory {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     val database by lazy { WavelengthDatabase.create(this) }
     val library by lazy { LibraryRepository(this, database.songDao(), appScope) }
+    val playlists by lazy { PlaylistRepository(database.playlistDao()) }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)

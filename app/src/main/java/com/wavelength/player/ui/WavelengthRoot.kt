@@ -1,38 +1,52 @@
 package com.wavelength.player.ui
 
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.wavelength.player.data.db.SongEntity
 import com.wavelength.player.data.library.Library
+import com.wavelength.player.ui.components.AddToPlaylistSheet
 import com.wavelength.player.ui.components.AlbumArt
 import com.wavelength.player.ui.components.MiniPlayer
+import com.wavelength.player.ui.components.PlaylistNameDialog
+import com.wavelength.player.ui.components.SongActionsSheet
+import com.wavelength.player.ui.components.SongMenu
 import com.wavelength.player.ui.components.art
 import com.wavelength.player.ui.screens.CollectionScreen
 import com.wavelength.player.ui.screens.LibraryActions
 import com.wavelength.player.ui.screens.LibraryScreen
 import com.wavelength.player.ui.screens.NowPlayingScreen
+import com.wavelength.player.ui.screens.PlaylistScreen
+import com.wavelength.player.ui.screens.QueueSheet
 import kotlinx.coroutines.delay
 
 private const val NOW_PLAYING = "now_playing"
@@ -41,11 +55,32 @@ private const val NOW_PLAYING = "now_playing"
 fun WavelengthRoot(vm: MainViewModel) {
     val nav = rememberNavController()
     val library by vm.library.collectAsStateWithLifecycle()
+    val playlists by vm.playlists.collectAsStateWithLifecycle()
     val isScanning by vm.isScanning.collectAsStateWithLifecycle()
     val player by vm.player.state.collectAsStateWithLifecycle()
     val query by vm.query.collectAsStateWithLifecycle()
     val results by vm.searchResults.collectAsStateWithLifecycle()
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
+    val songsById = remember(library) { library?.songs?.associateBy { it.id }.orEmpty() }
+
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
+
+    // Sheets and dialogs shown over any screen.
+    var songMenu by remember { mutableStateOf<SongMenu?>(null) }
+    var addToPlaylist by remember { mutableStateOf<List<SongEntity>?>(null) }
+    var newPlaylistFor by remember { mutableStateOf<List<SongEntity>?>(null) }
+    var showQueue by remember { mutableStateOf(false) }
+    var exporting by remember { mutableStateOf<PlaylistUi?>(null) }
+
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        uri?.let(vm::importPlaylist)
+    }
+    val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("audio/x-mpegurl")) { uri ->
+        val p = exporting
+        if (uri != null && p != null) vm.exportPlaylist(p, uri)
+        exporting = null
+    }
 
     // Poll the playback position a few times a second while something is playing.
     var positionMs by remember { mutableLongStateOf(0L) }
@@ -56,12 +91,16 @@ fun WavelengthRoot(vm: MainViewModel) {
         } while (player.isPlaying)
     }
 
-    val currentArt: AlbumArt? = player.songId?.let { id -> library?.songs?.find { it.id == id }?.art() }
+    val currentArt: AlbumArt? = player.songId?.let { songsById[it]?.art() }
     val showMini = player.hasSong && route != NOW_PLAYING
     val listPadding = PaddingValues(bottom = if (showMini) 96.dp else 16.dp)
 
     val actions = LibraryActions(
         play = { songs, i, shuffle -> vm.player.play(songs, i, shuffle) },
+        more = { songMenu = it },
+        openPlaylist = { nav.navigate("playlist/$it") },
+        newPlaylist = { newPlaylistFor = emptyList() },
+        importPlaylist = { importLauncher.launch(arrayOf("audio/x-mpegurl", "audio/mpegurl", "application/vnd.apple.mpegurl", "application/x-mpegurl", "*/*")) },
         openAlbum = { nav.navigate("album/$it") },
         openArtist = { nav.navigate("artist/${Uri.encode(it)}") },
         openFolder = { nav.navigate("folder/${Uri.encode(it)}") },
@@ -74,8 +113,29 @@ fun WavelengthRoot(vm: MainViewModel) {
                 composable("library") {
                     Box(Modifier.statusBarsPadding()) {
                         LibraryScreen(
-                            library, isScanning, player.songId, query, results,
+                            library, playlists, isScanning, player.songId, query, results,
                             vm::setQuery, vm::rescan, actions, listPadding,
+                        )
+                    }
+                }
+                composable("playlist/{id}") { entry ->
+                    val id = entry.arguments?.getString("id")?.toLongOrNull()
+                    val playlist = playlists.find { it.id == id }
+                    if (playlist == null) {
+                        LaunchedEffect(Unit) { delay(300); if (playlists.none { it.id == id }) nav.popBackStack() }
+                        return@composable
+                    }
+                    Box(Modifier.statusBarsPadding()) {
+                        PlaylistScreen(
+                            playlist, player.songId,
+                            onPlay = actions.play,
+                            onMore = actions.more,
+                            onReorder = { vm.reorderPlaylist(playlist, it) },
+                            onRename = { vm.renamePlaylist(playlist.id, it) },
+                            onDelete = { nav.popBackStack(); vm.deletePlaylist(playlist) },
+                            onExport = { exporting = playlist; exportLauncher.launch("${playlist.name}.m3u8") },
+                            onBack = { nav.popBackStack() },
+                            contentPadding = listPadding,
                         )
                     }
                 }
@@ -110,34 +170,84 @@ fun WavelengthRoot(vm: MainViewModel) {
                         onSeek = { positionMs = it; vm.player.seekTo(it) },
                         onToggleShuffle = vm.player::toggleShuffle,
                         onCycleRepeat = vm.player::cycleRepeat,
+                        onOpenQueue = { showQueue = true },
                     )
                 }
             }
 
-            if (showMini) {
-                MiniPlayer(
-                    state = player,
-                    art = currentArt,
-                    progress = if (player.durationMs > 0) (positionMs.toFloat() / player.durationMs).coerceIn(0f, 1f) else 0f,
-                    onOpen = { nav.navigate(NOW_PLAYING) { launchSingleTop = true } },
-                    onPlayPause = vm.player::togglePlayPause,
-                    onNext = vm.player::next,
-                    modifier = Modifier.align(Alignment.BottomCenter).navigationBarsPadding(),
-                )
+            Column(Modifier.align(Alignment.BottomCenter).navigationBarsPadding()) {
+                SnackbarHost(snackbar)
+                if (showMini) {
+                    MiniPlayer(
+                        state = player,
+                        art = currentArt,
+                        progress = if (player.durationMs > 0) (positionMs.toFloat() / player.durationMs).coerceIn(0f, 1f) else 0f,
+                        onOpen = { nav.navigate(NOW_PLAYING) { launchSingleTop = true } },
+                        onPlayPause = vm.player::togglePlayPause,
+                        onNext = vm.player::next,
+                    )
+                }
             }
         }
+    }
+
+    songMenu?.let { menu ->
+        val single = menu.songs.singleOrNull()
+        val album = single?.let { s -> library?.albums?.find { it.id == s.albumId } }
+        SongActionsSheet(
+            menu = menu,
+            onDismiss = { songMenu = null },
+            onPlayNext = { vm.playNext(menu.songs) },
+            onAddToQueue = { vm.addToQueue(menu.songs) },
+            onAddToPlaylist = { songMenu = null; addToPlaylist = menu.songs },
+            onGoToAlbum = album?.let { a -> { nav.navigate("album/${a.id}") } },
+            onGoToArtist = single?.let { s -> { nav.navigate("artist/${Uri.encode(s.artist)}") } },
+            onRemoveFromPlaylist = menu.playlist?.let { p ->
+                menu.playlistPosition?.let { pos -> { vm.removeFromPlaylist(p, pos) } }
+            },
+        )
+    }
+    addToPlaylist?.let { songs ->
+        AddToPlaylistSheet(
+            songs, playlists,
+            onDismiss = { addToPlaylist = null },
+            onPick = { vm.addToPlaylist(it, songs) },
+            onNew = { addToPlaylist = null; newPlaylistFor = songs },
+        )
+    }
+    newPlaylistFor?.let { songs ->
+        PlaylistNameDialog(
+            title = "New playlist",
+            initial = "",
+            confirmLabel = "Create",
+            onDismiss = { newPlaylistFor = null },
+            onConfirm = { name ->
+                vm.createPlaylist(name, songs, open = if (songs.isEmpty()) { id -> nav.navigate("playlist/$id") } else null)
+            },
+        )
+    }
+    if (showQueue && player.hasSong) {
+        QueueSheet(
+            upNext = player.upNext,
+            queueSize = player.queueSize,
+            shuffle = player.shuffle,
+            songsById = songsById,
+            onJump = vm.player::jumpTo,
+            onRemove = vm.player::removeFromQueue,
+            onDismiss = { showQueue = false },
+        )
     }
 }
 
 private data class CollectionData(
     val title: String,
     val subtitle: String,
-    val songs: List<com.wavelength.player.data.db.SongEntity>,
+    val songs: List<SongEntity>,
     val cover: AlbumArt?,
     val numbered: Boolean,
 )
 
-private fun androidx.navigation.NavGraphBuilder.collection(
+private fun NavGraphBuilder.collection(
     nav: NavHostController,
     route: String,
     library: Library?,
@@ -156,7 +266,7 @@ private fun androidx.navigation.NavGraphBuilder.collection(
     Box(Modifier.statusBarsPadding()) {
         CollectionScreen(
             data.title, data.subtitle, data.songs, data.cover, data.numbered,
-            currentSongId, actions.play, onBack = { nav.popBackStack() }, contentPadding = padding,
+            currentSongId, actions.play, actions.more, onBack = { nav.popBackStack() }, contentPadding = padding,
         )
     }
 }

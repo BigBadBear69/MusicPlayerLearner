@@ -28,7 +28,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
 import androidx.compose.material.icons.rounded.LibraryMusic
@@ -71,7 +73,9 @@ import com.wavelength.player.data.db.SongEntity
 import com.wavelength.player.data.library.Album
 import com.wavelength.player.data.library.Artist
 import com.wavelength.player.data.library.Library
+import com.wavelength.player.ui.PlaylistUi
 import com.wavelength.player.ui.SearchResults
+import com.wavelength.player.ui.components.SongMenu
 import com.wavelength.player.ui.components.ArtImage
 import com.wavelength.player.ui.components.IconTile
 import com.wavelength.player.ui.components.ListRow
@@ -83,18 +87,24 @@ import kotlinx.coroutines.launch
 
 /** Callbacks shared by the library and detail screens. */
 class LibraryActions(
-    val play: (songs: List<SongEntity>, index: Int, shuffle: Boolean) -> Unit,
+    /** index null = start from a random song. */
+    val play: (songs: List<SongEntity>, index: Int?, shuffle: Boolean) -> Unit,
+    val more: (SongMenu) -> Unit,
+    val openPlaylist: (Long) -> Unit,
+    val newPlaylist: () -> Unit,
+    val importPlaylist: () -> Unit,
     val openAlbum: (Long) -> Unit,
     val openArtist: (String) -> Unit,
     val openFolder: (String) -> Unit,
     val openGenre: (String) -> Unit,
 )
 
-private enum class LibraryTab(val label: String) { Songs("Songs"), Albums("Albums"), Artists("Artists"), Folders("Folders"), Genres("Genres") }
+private enum class LibraryTab(val label: String) { Playlists("Playlists"), Songs("Songs"), Albums("Albums"), Artists("Artists"), Folders("Folders"), Genres("Genres") }
 
 @Composable
 fun LibraryScreen(
     library: Library?,
+    playlists: List<PlaylistUi>,
     isScanning: Boolean,
     currentSongId: Long?,
     query: String,
@@ -105,7 +115,8 @@ fun LibraryScreen(
     contentPadding: PaddingValues,
 ) {
     var searching by rememberSaveable { mutableStateOf(false) }
-    val pager = rememberPagerState { LibraryTab.entries.size }
+    // Open on Songs; Playlists is one swipe to the left.
+    val pager = rememberPagerState(initialPage = LibraryTab.Songs.ordinal) { LibraryTab.entries.size }
     val scope = rememberCoroutineScope()
 
     Column(Modifier.fillMaxSize()) {
@@ -154,6 +165,7 @@ fun LibraryScreen(
                 }
                 HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
                     when (LibraryTab.entries[page]) {
+                        LibraryTab.Playlists -> PlaylistsTab(playlists, actions, contentPadding)
                         LibraryTab.Songs -> SongsTab(library.songs, currentSongId, actions, contentPadding)
                         LibraryTab.Albums -> AlbumGrid(library.albums, actions.openAlbum, contentPadding)
                         LibraryTab.Artists -> LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
@@ -230,7 +242,7 @@ private fun SearchResultsList(results: SearchResults, currentSongId: Long?, acti
         if (results.songs.isNotEmpty()) {
             item { SectionHeader("Songs") }
             itemsIndexed(results.songs, key = { _, s -> "s:" + s.id }) { i, s ->
-                SongRow(s, s.id == currentSongId, onClick = { actions.play(results.songs, i, false) })
+                SongRow(s, s.id == currentSongId, onClick = { actions.play(results.songs, i, false) }, onMore = { actions.more(s.menu()) })
             }
         }
     }
@@ -240,7 +252,7 @@ private fun SearchResultsList(results: SearchResults, currentSongId: Long?, acti
 private fun SongsTab(songs: List<SongEntity>, currentSongId: Long?, actions: LibraryActions, contentPadding: PaddingValues) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item {
-            PlayShuffleBar(onPlay = { actions.play(songs, 0, false) }, onShuffle = { actions.play(songs, 0, true) })
+            PlayShuffleBar(onPlay = { actions.play(songs, 0, false) }, onShuffle = { actions.play(songs, null, true) })
             Text(
                 songCount(songs.size),
                 Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -249,7 +261,25 @@ private fun SongsTab(songs: List<SongEntity>, currentSongId: Long?, actions: Lib
             )
         }
         itemsIndexed(songs, key = { _, s -> s.id }) { i, s ->
-            SongRow(s, s.id == currentSongId, onClick = { actions.play(songs, i, false) })
+            SongRow(s, s.id == currentSongId, onClick = { actions.play(songs, i, false) }, onMore = { actions.more(s.menu()) })
+        }
+    }
+}
+
+fun SongEntity.menu() = SongMenu(listOf(this), title, "$artist · $album", art())
+
+@Composable
+private fun PlaylistsTab(playlists: List<PlaylistUi>, actions: LibraryActions, contentPadding: PaddingValues) {
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
+        item {
+            ListRow("New playlist", "Start an empty playlist", actions.newPlaylist) { IconTile(Icons.Rounded.Add) }
+            ListRow("Import playlist", "From an .m3u or .m3u8 file", actions.importPlaylist) { IconTile(Icons.Rounded.FileDownload) }
+        }
+        if (playlists.isEmpty()) item { EmptyNote("No playlists yet. Create one, or tap ⋮ on any song and choose \"Add to playlist\".") }
+        items(playlists, key = { it.id }) { p ->
+            ListRow(p.name, songCount(p.entries.size), { actions.openPlaylist(p.id) }) {
+                ArtImage(p.songs.firstOrNull()?.art(), Modifier.size(48.dp))
+            }
         }
     }
 }
