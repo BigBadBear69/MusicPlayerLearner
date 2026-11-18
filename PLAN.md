@@ -86,8 +86,8 @@ For every song, from your phone or from Spotify, Wavelength records:
 ## Build phases
 | # | Phase | Needs anything from you? |
 |---|---|---|
-| 0 | Project setup + automatic APK builds published to **GitHub Releases** | Release signing secrets (see below) |
-| 1 | Library scan, browse and search, background playback | No |
+| 0 | ✅ Project setup + automatic APK builds published to **GitHub Releases** | Release signing secrets (see below) |
+| 1 | ✅ Library scan, browse and search, background playback | No |
 | 2 | Playlists, queue, smart shuffle and loop | No |
 | 3 | Listening tracker, Affinity Score, stats | No |
 | 4 | Discover (Last.fm, Deezer, ListenBrainz), thumbs, Wishlist | Last.fm API key, entered in app settings |
@@ -103,7 +103,7 @@ For every song, from your phone or from Spotify, Wavelength records:
 ## What's needed from you, and when
 | Item | When | How |
 |---|---|---|
-| Android version (Settings → About phone) | Before Phase 0 | Tell me in chat |
+| Android version | ✅ Android 17 (API 37) | |
 | 4 GitHub repository secrets for app signing | Phase 0 | I generate the key; you paste the values into GitHub → Settings → Secrets and variables → Actions |
 | Allow GitHub Actions to create releases | Phase 0 | GitHub → Settings → Actions → General → Workflow permissions → "Read and write" |
 | Free Last.fm API key | Phase 4 | Create it at last.fm/api, then paste it into Wavelength's settings (not in chat) |
