@@ -10,6 +10,11 @@ import com.wavelength.player.data.db.PlayEventEntity
 import com.wavelength.player.data.db.SongEntity
 import com.wavelength.player.data.db.SongStatsEntity
 import com.wavelength.player.data.stats.StatsRange
+import com.wavelength.player.data.db.DiscoverItemEntity
+import com.wavelength.player.data.discover.DiscoverState
+import com.wavelength.player.data.discover.Normalize
+import com.wavelength.player.data.discover.Recommendation
+import com.wavelength.player.data.settings.AppSettings
 import com.wavelength.player.data.stats.StatsSnapshot
 import com.wavelength.player.data.library.Album
 import com.wavelength.player.data.library.Artist
@@ -53,6 +58,8 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as WavelengthApp).library
     private val playlistRepo = (app as WavelengthApp).playlists
     private val statsRepo = (app as WavelengthApp).stats
+    private val discoverRepo = (app as WavelengthApp).discover
+    private val settingsStore = (app as WavelengthApp).settings
 
     val library: StateFlow<Library?> = repo.library
     val isScanning: StateFlow<Boolean> = repo.isScanning
@@ -214,6 +221,93 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---- Discover ----
+
+    val discover: StateFlow<DiscoverState> = discoverRepo.state
+    val discoverItems: StateFlow<Map<String, DiscoverItemEntity>> = discoverRepo.items
+    val deezerInfo = discoverRepo.deezerInfo
+    val settings: StateFlow<AppSettings> = settingsStore.settings
+
+    /** Wishlist, each marked with the matching song if it's now on the phone. */
+    val wishlist: StateFlow<List<Pair<DiscoverItemEntity, SongEntity?>>> =
+        combine(discoverRepo.items, repo.library) { items, lib ->
+            val byKey = lib?.songs?.associateBy { Normalize.key(it.artist, it.title) }.orEmpty()
+            items.values.filter { it.wishlisted }.sortedByDescending { it.wishlistedAt }.map { it to byKey[it.key] }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    private val preview = PreviewPlayer(app) { key, ms ->
+        discoverRepo.state.value.result?.all?.find { it.key == key }?.let { discoverRepo.recordPreview(it, ms) }
+    }
+    val previewState: StateFlow<PreviewState> = preview.state
+    val previewPositionMs get() = preview.positionMs
+    val previewDurationMs get() = preview.durationMs
+
+    fun refreshDiscover() {
+        library.value?.songs?.let(discoverRepo::refresh)
+    }
+
+    /** Refresh automatically the first time, and when recommendations are more than 3 days old. */
+    fun maybeAutoRefreshDiscover() {
+        val st = discover.value
+        val age = st.result?.let { System.currentTimeMillis() - it.createdAt }
+        if (!st.loading && (st.result == null || age!! > 3 * 86_400_000L) && settings.value.discoverOnline) refreshDiscover()
+    }
+
+    fun togglePreview(rec: Recommendation) {
+        val st = preview.state.value
+        if (st.key == rec.key && (st.playing || st.loading)) { preview.stop(); return }
+        preview.loading(rec.key)
+        viewModelScope.launch {
+            val track = discoverRepo.preview(rec)
+            if (preview.state.value.key != rec.key) return@launch // user moved on
+            val url = track?.previewUrl
+            if (url == null) preview.notFound(rec.key) else preview.play(rec.key, url)
+        }
+    }
+
+    fun stopPreview() = preview.stop()
+
+    fun thumbsUp(rec: Recommendation) {
+        val was = discoverItems.value[rec.key]?.verdict == 1
+        discoverRepo.setVerdict(rec, 1)
+        if (!was) say("Got it: more like \"${rec.title}\" next time")
+    }
+
+    fun thumbsDown(rec: Recommendation) {
+        if (preview.state.value.key == rec.key) preview.stop()
+        discoverRepo.setVerdict(rec, -1)
+        say("Hidden. You'll see less like this")
+    }
+
+    fun toggleWishlist(rec: Recommendation) {
+        val was = discoverItems.value[rec.key]?.wishlisted == true
+        discoverRepo.toggleWishlist(rec)
+        say(if (was) "Removed from Wishlist" else "Saved \"${rec.title}\" to your Wishlist")
+    }
+
+    fun removeFromWishlist(key: String) = discoverRepo.removeFromWishlist(key)
+
+    fun resolveWishlistCovers(list: List<DiscoverItemEntity>) = discoverRepo.resolveWishlistCovers(list)
+
+    // ---- Settings ----
+
+    fun setLastFmKey(key: String) = settingsStore.update { it.copy(lastFmApiKey = key) }
+    fun setDiscoverOnline(on: Boolean) = settingsStore.update { it.copy(discoverOnline = on) }
+    suspend fun testLastFmKey(key: String) = discoverRepo.testLastFmKey(key)
+    fun clearDiscoverCache() {
+        viewModelScope.launch {
+            discoverRepo.clearCache()
+            say("Discover cache cleared")
+        }
+    }
+
+    // ---- Playlists: add many songs at once ----
+
+    fun addSongsToPlaylist(playlistId: Long, songs: List<SongEntity>) {
+        val p = playlists.value.find { it.id == playlistId } ?: return
+        if (songs.isNotEmpty()) addToPlaylist(p, songs)
+    }
+
     // ---- Queue ----
 
     fun playNext(songs: List<SongEntity>) {
@@ -227,6 +321,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        preview.release()
         player.release()
     }
 }

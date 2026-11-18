@@ -12,7 +12,7 @@
 ## Core principles
 1. **Everything happens inside Wavelength.** It never creates, edits or clutters anything in your Spotify account, and it never sends you to another app to listen.
 2. **Your listening data stays on your phone.** Only song and artist names are sent online, to find similar music, and you can turn that off.
-3. **Free only.** Last.fm, Deezer and ListenBrainz are free to use, and Spotify playback goes through your existing Spotify account.
+3. **Free only.** Last.fm and Deezer are free to use, and Spotify playback goes through your existing Spotify account.
 
 ---
 
@@ -51,7 +51,7 @@ For every song, from your phone or from Spotify, Wavelength records:
 
 ### 4. Discover: finding new similar songs
 1. **Seeds:** your highest-Affinity songs and artists. Artists you often skip count as "less of this."
-2. **Lookup:** song and artist names are sent to Last.fm, the main source (similar tracks and artists). Deezer and ListenBrainz are backup sources.
+2. **Lookup:** song and artist names are sent to Last.fm, the main source (similar tracks and artists). Deezer provides 30-second previews and cover art, and its related-artists data is used when no Last.fm key is set. (ListenBrainz was dropped: Last.fm + Deezer cover it.)
 3. **Ranking:**
    - Songs recommended because of several of your favourites rank higher
    - Songs you already have are removed
@@ -90,7 +90,7 @@ For every song, from your phone or from Spotify, Wavelength records:
 | 1 | ✅ Library scan, browse and search, background playback | No |
 | 2 | ✅ Playlists, queue, smart shuffle and loop | No |
 | 3 | ✅ Listening tracker, Affinity Score, stats | No |
-| 4 | Discover (Last.fm, Deezer, ListenBrainz), thumbs, Wishlist | Last.fm API key, entered in app settings |
+| 4 | ✅ Discover (Last.fm, with Deezer for previews and as a no-key fallback), thumbs, Wishlist, multi-select "Add songs" for playlists | Last.fm API key, entered in app settings (optional) |
 | 5 | Spotify playback inside Wavelength | Spotify Premium + Spotify Client ID |
 | 6 | Automatic playlists from your library | No |
 | 7 | Polish: equalizer, sleep timer, lyrics, widget | No |

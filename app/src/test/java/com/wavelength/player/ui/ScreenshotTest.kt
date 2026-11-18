@@ -6,6 +6,7 @@ import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performClick
 import com.wavelength.player.data.db.Outcome
 import com.wavelength.player.data.db.PlayEventEntity
 import com.wavelength.player.data.db.SongEntity
@@ -32,7 +33,7 @@ import kotlin.random.Random
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [36], qualifiers = "w400dp-h2200dp-xxhdpi")
+@Config(sdk = [36], qualifiers = "w400dp-h1400dp-xxhdpi")
 class ScreenshotTest {
     @get:Rule val compose = createComposeRule()
 
@@ -100,5 +101,52 @@ class ScreenshotTest {
         }.reversed()
         compose.setContent { WavelengthTheme { SongStatsSheet(song, s, list, {}, {}, {}) } }
         save("song-sheet")
+    }
+
+    private fun recs(prefix: String, n: Int, newArtist: Boolean = false) = List(n) { i ->
+        com.wavelength.player.data.discover.Recommendation("$prefix$i", listOf("Justice", "MGMT", "Cassius", "Gorillaz", "Fatboy Slim")[i % 5],
+            listOf("Neverender", "Little Dark Age", "Toop Toop", "Feel Good Inc.", "Praise You")[i % 5], 1.0 - i * 0.1,
+            listOf("Daft Punk", "Tame Impala")[i % 2], if (i == 0) 3 else 1, newArtist)
+    }
+
+    @Test
+    fun discover() {
+        assumeTrue(System.getProperty("screenshots") != null)
+        val result = com.wavelength.player.data.discover.DiscoverResult(
+            recs("t", 4), listOf("Daft Punk" to recs("b", 3)), recs("n", 3, true), 12, "Last.fm", System.currentTimeMillis() - 600_000,
+        )
+        val item = com.wavelength.player.data.db.DiscoverItemEntity("t0", "Justice", "Neverender", verdict = 1, wishlisted = true)
+        compose.setContent {
+            WavelengthTheme {
+                androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                    com.wavelength.player.ui.screens.DiscoverScreen(
+                        com.wavelength.player.data.discover.DiscoverState(result = result), hasLastFmKey = false, online = true,
+                        items = mapOf("t0" to item), covers = emptyMap(), preview = PreviewState(key = "t1", playing = true),
+                        wishlist = listOf(item to null),
+                        actions = com.wavelength.player.ui.screens.DiscoverActions({}, {}, {}, {}, {}, {}, {}, {}, {}, { 0.4f }),
+                        onBack = {}, contentPadding = PaddingValues(),
+                    )
+                }
+            }
+        }
+        save("discover")
+    }
+
+    @Test
+    fun addSongs() {
+        assumeTrue(System.getProperty("screenshots") != null)
+        compose.setContent {
+            WavelengthTheme {
+                androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                    com.wavelength.player.ui.screens.AddSongsScreen(
+                        "Road trip", com.wavelength.player.data.library.Library.from(songs), setOf(2L, 3L), setOf(1L), {}, {},
+                    )
+                }
+            }
+        }
+        compose.onAllNodes(androidx.compose.ui.test.hasClickAction())[6].performClick()
+        compose.onAllNodes(androidx.compose.ui.test.hasClickAction())[8].performClick()
+        compose.onAllNodes(androidx.compose.ui.test.hasClickAction())[10].performClick()
+        save("add-songs")
     }
 }

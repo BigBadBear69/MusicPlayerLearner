@@ -9,6 +9,9 @@ import com.wavelength.player.data.db.WavelengthDatabase
 import com.wavelength.player.data.library.LibraryRepository
 import com.wavelength.player.data.library.PlaylistRepository
 import com.wavelength.player.data.stats.StatsRepository
+import com.wavelength.player.data.settings.SettingsStore
+import com.wavelength.player.data.discover.DiscoverRepository
+import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.wavelength.player.ui.components.AlbumArtFetcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,10 +23,16 @@ class WavelengthApp : Application(), SingletonImageLoader.Factory {
     val library by lazy { LibraryRepository(this, database.songDao(), appScope) }
     val playlists by lazy { PlaylistRepository(database.playlistDao()) }
     val stats by lazy { StatsRepository(database) }
+    val settings by lazy { SettingsStore(this) }
+    val discover by lazy { DiscoverRepository(database, settings, appScope) }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
-            .components { add(AlbumArtFetcher.Factory(contentResolver)); add(AlbumArtFetcher.AlbumKeyer()) }
+            .components {
+                add(AlbumArtFetcher.Factory(contentResolver))
+                add(AlbumArtFetcher.AlbumKeyer())
+                add(OkHttpNetworkFetcherFactory()) // Discover cover art
+            }
             .crossfade(true)
             .build()
 }

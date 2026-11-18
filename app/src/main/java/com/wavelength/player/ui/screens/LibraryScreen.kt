@@ -29,7 +29,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.MoreVert
+import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.FileDownload
@@ -39,6 +42,8 @@ import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -95,6 +100,8 @@ class LibraryActions(
     val openPlaylist: (Long) -> Unit,
     val newPlaylist: () -> Unit,
     val openStats: () -> Unit,
+    val openDiscover: () -> Unit,
+    val openSettings: () -> Unit,
     val openFavorites: () -> Unit,
     val importPlaylist: () -> Unit,
     val openAlbum: (Long) -> Unit,
@@ -137,9 +144,19 @@ fun LibraryScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = actions.openDiscover) { Icon(Icons.Rounded.AutoAwesome, "Discover new music", tint = MaterialTheme.colorScheme.tertiary) }
                     IconButton(onClick = actions.openStats) { Icon(Icons.Rounded.Insights, "Your stats") }
                     IconButton(onClick = { searching = true }) { Icon(Icons.Rounded.Search, "Search") }
-                    IconButton(onClick = onRescan, enabled = !isScanning) { Icon(Icons.Rounded.Refresh, "Rescan music") }
+                    Box {
+                        var menu by remember { mutableStateOf(false) }
+                        IconButton(onClick = { menu = true }) { Icon(Icons.Rounded.MoreVert, "More") }
+                        DropdownMenu(menu, onDismissRequest = { menu = false }) {
+                            DropdownMenuItem(text = { Text("Rescan music") }, leadingIcon = { Icon(Icons.Rounded.Refresh, null) },
+                                enabled = !isScanning, onClick = { menu = false; onRescan() })
+                            DropdownMenuItem(text = { Text("Settings") }, leadingIcon = { Icon(Icons.Rounded.Settings, null) },
+                                onClick = { menu = false; actions.openSettings() })
+                        }
+                    }
                 },
             )
         }

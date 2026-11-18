@@ -23,6 +23,7 @@ import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DragHandle
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.FileUpload
+import androidx.compose.material.icons.rounded.LibraryAdd
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -30,6 +31,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -70,6 +72,7 @@ fun PlaylistScreen(
     onRename: (String) -> Unit,
     onDelete: () -> Unit,
     onExport: () -> Unit,
+    onAddSongs: () -> Unit,
     onBack: () -> Unit,
     contentPadding: PaddingValues,
 ) {
@@ -134,11 +137,16 @@ fun PlaylistScreen(
                     PlayShuffleBar(onPlay = { onPlay(songs, 0, false) }, onShuffle = { onPlay(songs, null, true) })
                 } else {
                     Text(
-                        "This playlist is empty. Tap ⋮ next to any song in your library and choose \"Add to playlist\".",
-                        Modifier.fillMaxWidth().padding(24.dp),
+                        "This playlist is empty. Tap \"Add songs\" to pick as many songs as you like at once.",
+                        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 8.dp),
                         textAlign = TextAlign.Center,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                OutlinedButton(onClick = onAddSongs, modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp)) {
+                    Icon(Icons.Rounded.LibraryAdd, null)
+                    Spacer(Modifier.size(8.dp))
+                    Text("Add songs")
                 }
             }
             items(rows, key = { it.position }) { entry ->

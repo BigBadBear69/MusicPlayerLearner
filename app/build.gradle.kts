@@ -15,8 +15,8 @@ android {
         applicationId = "com.wavelength.player"
         minSdk = 29
         targetSdk = 37
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
     }
 
     signingConfigs {
@@ -78,6 +78,8 @@ dependencies {
     ksp(libs.room.compiler)
 
     implementation(libs.coil.compose)
+    implementation(libs.coil.network)
+    implementation(libs.okhttp)
     implementation(libs.reorderable)
 
     testImplementation(libs.junit)
@@ -89,6 +91,8 @@ dependencies {
 
 // ./gradlew testDebugUnitTest -Pscreenshots renders screens to app/build/screenshots
 tasks.withType<Test>().configureEach {
+    if (project.hasProperty("live")) systemProperty("live", "true")
+    testLogging { showStandardStreams = project.hasProperty("live") }
     if (project.hasProperty("screenshots")) {
         systemProperty("screenshots", "true")
         systemProperty("screenshotDir", layout.buildDirectory.dir("screenshots").get().asFile.absolutePath)

@@ -47,6 +47,10 @@ import com.wavelength.player.ui.screens.LibraryScreen
 import com.wavelength.player.ui.screens.NowPlayingScreen
 import com.wavelength.player.ui.screens.PlaylistScreen
 import com.wavelength.player.ui.screens.QueueSheet
+import com.wavelength.player.ui.screens.AddSongsScreen
+import com.wavelength.player.ui.screens.DiscoverActions
+import com.wavelength.player.ui.screens.DiscoverScreen
+import com.wavelength.player.ui.screens.SettingsScreen
 import com.wavelength.player.ui.screens.SongStatsSheet
 import com.wavelength.player.ui.screens.StatsScreen
 import kotlinx.coroutines.delay
@@ -109,6 +113,8 @@ fun WavelengthRoot(vm: MainViewModel) {
         openPlaylist = { nav.navigate("playlist/$it") },
         newPlaylist = { newPlaylistFor = emptyList() },
         openStats = { nav.navigate("stats") },
+        openDiscover = { nav.navigate("discover") },
+        openSettings = { nav.navigate("settings") },
         openFavorites = { nav.navigate("favorites") },
         importPlaylist = { importLauncher.launch(arrayOf("audio/x-mpegurl", "audio/mpegurl", "application/vnd.apple.mpegurl", "application/x-mpegurl", "*/*")) },
         openAlbum = { nav.navigate("album/$it") },
@@ -144,8 +150,66 @@ fun WavelengthRoot(vm: MainViewModel) {
                             onRename = { vm.renamePlaylist(playlist.id, it) },
                             onDelete = { nav.popBackStack(); vm.deletePlaylist(playlist) },
                             onExport = { exporting = playlist; exportLauncher.launch("${playlist.name}.m3u8") },
+                            onAddSongs = { nav.navigate("playlist/${playlist.id}/add") },
                             onBack = { nav.popBackStack() },
                             contentPadding = listPadding,
+                        )
+                    }
+                }
+                composable("playlist/{id}/add") { entry ->
+                    val id = entry.arguments?.getString("id")?.toLongOrNull()
+                    val playlist = playlists.find { it.id == id } ?: return@composable
+                    Box(Modifier.statusBarsPadding()) {
+                        AddSongsScreen(
+                            playlistName = playlist.name,
+                            library = library,
+                            alreadyInPlaylist = remember(playlist) { playlist.entries.mapTo(HashSet()) { it.song.id } },
+                            favoriteIds = favoriteIds,
+                            onAdd = { vm.addSongsToPlaylist(playlist.id, it) },
+                            onClose = { nav.popBackStack() },
+                        )
+                    }
+                }
+                composable("discover") {
+                    val discover by vm.discover.collectAsStateWithLifecycle()
+                    val items by vm.discoverItems.collectAsStateWithLifecycle()
+                    val covers by vm.deezerInfo.collectAsStateWithLifecycle()
+                    val preview by vm.previewState.collectAsStateWithLifecycle()
+                    val wishlist by vm.wishlist.collectAsStateWithLifecycle()
+                    val settings by vm.settings.collectAsStateWithLifecycle()
+                    LaunchedEffect(library) { if (library != null) vm.maybeAutoRefreshDiscover() }
+                    LaunchedEffect(wishlist) { vm.resolveWishlistCovers(wishlist.map { it.first }) }
+                    Box(Modifier.statusBarsPadding()) {
+                        DiscoverScreen(
+                            discover, settings.lastFmApiKey.isNotBlank(), settings.discoverOnline, items, covers, preview, wishlist,
+                            DiscoverActions(
+                                refresh = vm::refreshDiscover,
+                                togglePreview = vm::togglePreview,
+                                stopPreview = vm::stopPreview,
+                                thumbsUp = vm::thumbsUp,
+                                thumbsDown = vm::thumbsDown,
+                                toggleWishlist = vm::toggleWishlist,
+                                removeFromWishlist = { vm.removeFromWishlist(it) },
+                                playLocal = { vm.player.play(listOf(it)) },
+                                openSettings = { nav.navigate("settings") },
+                                previewProgress = { (vm.previewPositionMs.toFloat() / vm.previewDurationMs).coerceIn(0f, 1f) },
+                            ),
+                            onBack = { nav.popBackStack() },
+                            contentPadding = listPadding,
+                        )
+                    }
+                }
+                composable("settings") {
+                    val settings by vm.settings.collectAsStateWithLifecycle()
+                    Box(Modifier.statusBarsPadding()) {
+                        SettingsScreen(
+                            settings,
+                            onSaveKey = vm::setLastFmKey,
+                            onTestKey = { vm.testLastFmKey(it) },
+                            onDiscoverOnline = vm::setDiscoverOnline,
+                            onClearDiscoverCache = vm::clearDiscoverCache,
+                            onRescan = vm::rescan,
+                            onBack = { nav.popBackStack() },
                         )
                     }
                 }
