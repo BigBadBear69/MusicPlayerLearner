@@ -30,6 +30,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.FileDownload
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Folder
@@ -92,6 +94,8 @@ class LibraryActions(
     val more: (SongMenu) -> Unit,
     val openPlaylist: (Long) -> Unit,
     val newPlaylist: () -> Unit,
+    val openStats: () -> Unit,
+    val openFavorites: () -> Unit,
     val importPlaylist: () -> Unit,
     val openAlbum: (Long) -> Unit,
     val openArtist: (String) -> Unit,
@@ -105,6 +109,7 @@ private enum class LibraryTab(val label: String) { Playlists("Playlists"), Songs
 fun LibraryScreen(
     library: Library?,
     playlists: List<PlaylistUi>,
+    favoritesCount: Int,
     isScanning: Boolean,
     currentSongId: Long?,
     query: String,
@@ -132,6 +137,7 @@ fun LibraryScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = actions.openStats) { Icon(Icons.Rounded.Insights, "Your stats") }
                     IconButton(onClick = { searching = true }) { Icon(Icons.Rounded.Search, "Search") }
                     IconButton(onClick = onRescan, enabled = !isScanning) { Icon(Icons.Rounded.Refresh, "Rescan music") }
                 },
@@ -165,7 +171,7 @@ fun LibraryScreen(
                 }
                 HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
                     when (LibraryTab.entries[page]) {
-                        LibraryTab.Playlists -> PlaylistsTab(playlists, actions, contentPadding)
+                        LibraryTab.Playlists -> PlaylistsTab(playlists, favoritesCount, actions, contentPadding)
                         LibraryTab.Songs -> SongsTab(library.songs, currentSongId, actions, contentPadding)
                         LibraryTab.Albums -> AlbumGrid(library.albums, actions.openAlbum, contentPadding)
                         LibraryTab.Artists -> LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
@@ -269,9 +275,12 @@ private fun SongsTab(songs: List<SongEntity>, currentSongId: Long?, actions: Lib
 fun SongEntity.menu() = SongMenu(listOf(this), title, "$artist · $album", art())
 
 @Composable
-private fun PlaylistsTab(playlists: List<PlaylistUi>, actions: LibraryActions, contentPadding: PaddingValues) {
+private fun PlaylistsTab(playlists: List<PlaylistUi>, favoritesCount: Int, actions: LibraryActions, contentPadding: PaddingValues) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item {
+            ListRow("Favourites", "${songCount(favoritesCount)} · tap ♥ on Now Playing to add", actions.openFavorites) {
+                IconTile(Icons.Rounded.Favorite)
+            }
             ListRow("New playlist", "Start an empty playlist", actions.newPlaylist) { IconTile(Icons.Rounded.Add) }
             ListRow("Import playlist", "From an .m3u or .m3u8 file", actions.importPlaylist) { IconTile(Icons.Rounded.FileDownload) }
         }

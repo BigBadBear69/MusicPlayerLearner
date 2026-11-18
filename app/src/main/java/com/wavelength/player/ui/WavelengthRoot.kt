@@ -47,6 +47,8 @@ import com.wavelength.player.ui.screens.LibraryScreen
 import com.wavelength.player.ui.screens.NowPlayingScreen
 import com.wavelength.player.ui.screens.PlaylistScreen
 import com.wavelength.player.ui.screens.QueueSheet
+import com.wavelength.player.ui.screens.SongStatsSheet
+import com.wavelength.player.ui.screens.StatsScreen
 import kotlinx.coroutines.delay
 
 private const val NOW_PLAYING = "now_playing"
@@ -62,6 +64,8 @@ fun WavelengthRoot(vm: MainViewModel) {
     val results by vm.searchResults.collectAsStateWithLifecycle()
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
     val songsById = remember(library) { library?.songs?.associateBy { it.id }.orEmpty() }
+    val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
+    val songStats by vm.songStats.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
     LaunchedEffect(Unit) { vm.messages.collect { snackbar.showSnackbar(it) } }
@@ -72,6 +76,10 @@ fun WavelengthRoot(vm: MainViewModel) {
     var newPlaylistFor by remember { mutableStateOf<List<SongEntity>?>(null) }
     var showQueue by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf<PlaylistUi?>(null) }
+    var statsFor by remember { mutableStateOf<SongEntity?>(null) }
+    val statsExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
+        uri?.let(vm::exportStats)
+    }
 
     val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         uri?.let(vm::importPlaylist)
@@ -100,6 +108,8 @@ fun WavelengthRoot(vm: MainViewModel) {
         more = { songMenu = it },
         openPlaylist = { nav.navigate("playlist/$it") },
         newPlaylist = { newPlaylistFor = emptyList() },
+        openStats = { nav.navigate("stats") },
+        openFavorites = { nav.navigate("favorites") },
         importPlaylist = { importLauncher.launch(arrayOf("audio/x-mpegurl", "audio/mpegurl", "application/vnd.apple.mpegurl", "application/x-mpegurl", "*/*")) },
         openAlbum = { nav.navigate("album/$it") },
         openArtist = { nav.navigate("artist/${Uri.encode(it)}") },
@@ -113,7 +123,7 @@ fun WavelengthRoot(vm: MainViewModel) {
                 composable("library") {
                     Box(Modifier.statusBarsPadding()) {
                         LibraryScreen(
-                            library, playlists, isScanning, player.songId, query, results,
+                            library, playlists, favoriteIds.size, isScanning, player.songId, query, results,
                             vm::setQuery, vm::rescan, actions, listPadding,
                         )
                     }
@@ -136,6 +146,32 @@ fun WavelengthRoot(vm: MainViewModel) {
                             onExport = { exporting = playlist; exportLauncher.launch("${playlist.name}.m3u8") },
                             onBack = { nav.popBackStack() },
                             contentPadding = listPadding,
+                        )
+                    }
+                }
+                composable("stats") {
+                    val snapshot by vm.stats.collectAsStateWithLifecycle()
+                    val range by vm.statsRange.collectAsStateWithLifecycle()
+                    val recent by vm.recentListens.collectAsStateWithLifecycle()
+                    Box(Modifier.statusBarsPadding()) {
+                        StatsScreen(
+                            snapshot, range, recent, songsById,
+                            onRange = vm::setStatsRange,
+                            onOpenSong = { statsFor = it },
+                            onOpenArtist = actions.openArtist,
+                            onExport = { statsExportLauncher.launch("wavelength-listening-history.csv") },
+                            onReset = vm::resetStats,
+                            onBack = { nav.popBackStack() },
+                            contentPadding = listPadding,
+                        )
+                    }
+                }
+                composable("favorites") {
+                    val favs = favoriteIds.mapNotNull { songsById[it] }
+                    Box(Modifier.statusBarsPadding()) {
+                        CollectionScreen(
+                            "Favourites", "Newest first", favs, null, false,
+                            player.songId, actions.play, actions.more, onBack = { nav.popBackStack() }, contentPadding = listPadding,
                         )
                     }
                 }
@@ -171,6 +207,9 @@ fun WavelengthRoot(vm: MainViewModel) {
                         onToggleShuffle = vm.player::toggleShuffle,
                         onCycleRepeat = vm.player::cycleRepeat,
                         onOpenQueue = { showQueue = true },
+                        isFavorite = player.songId in favoriteIds,
+                        onToggleFavorite = { player.songId?.let { songsById[it] }?.let(vm::toggleFavorite) },
+                        onShowStats = { statsFor = player.songId?.let { songsById[it] } },
                     )
                 }
             }
@@ -205,6 +244,9 @@ fun WavelengthRoot(vm: MainViewModel) {
             onRemoveFromPlaylist = menu.playlist?.let { p ->
                 menu.playlistPosition?.let { pos -> { vm.removeFromPlaylist(p, pos) } }
             },
+            isFavorite = single?.let { it.id in favoriteIds },
+            onToggleFavorite = single?.let { s -> { vm.toggleFavorite(s) } },
+            onShowStats = single?.let { s -> { statsFor = s } },
         )
     }
     addToPlaylist?.let { songs ->
@@ -224,6 +266,17 @@ fun WavelengthRoot(vm: MainViewModel) {
             onConfirm = { name ->
                 vm.createPlaylist(name, songs, open = if (songs.isEmpty()) { id -> nav.navigate("playlist/$id") } else null)
             },
+        )
+    }
+    statsFor?.let { song ->
+        val events by remember(song.id) { vm.eventsForSong(song.id) }.collectAsStateWithLifecycle(emptyList())
+        SongStatsSheet(
+            song = song,
+            stats = songStats[song.id],
+            events = events,
+            onPlay = { vm.player.play(listOf(song)) },
+            onToggleFavorite = { vm.toggleFavorite(song) },
+            onDismiss = { statsFor = null },
         )
     }
     if (showQueue && player.hasSong) {

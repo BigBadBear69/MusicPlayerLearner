@@ -19,6 +19,9 @@ import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Favorite
+import androidx.compose.material.icons.rounded.FavoriteBorder
+import androidx.compose.material.icons.rounded.Insights
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.automirrored.rounded.PlaylistPlay
 import androidx.compose.material.icons.rounded.RemoveCircleOutline
@@ -72,6 +75,9 @@ fun SongActionsSheet(
     onGoToAlbum: (() -> Unit)?,
     onGoToArtist: (() -> Unit)?,
     onRemoveFromPlaylist: (() -> Unit)?,
+    isFavorite: Boolean? = null,
+    onToggleFavorite: (() -> Unit)? = null,
+    onShowStats: (() -> Unit)? = null,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.navigationBarsPadding().padding(bottom = 8.dp)) {
@@ -87,6 +93,13 @@ fun SongActionsSheet(
             SheetAction(Icons.AutoMirrored.Rounded.PlaylistPlay, "Play next") { onPlayNext(); onDismiss() }
             SheetAction(Icons.AutoMirrored.Rounded.QueueMusic, "Add to queue") { onAddToQueue(); onDismiss() }
             SheetAction(Icons.AutoMirrored.Rounded.PlaylistAdd, "Add to playlist…") { onAddToPlaylist() }
+            onToggleFavorite?.let { toggle ->
+                SheetAction(
+                    if (isFavorite == true) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                    if (isFavorite == true) "Remove from favourites" else "Add to favourites",
+                ) { toggle(); onDismiss() }
+            }
+            onShowStats?.let { show -> SheetAction(Icons.Rounded.Insights, "Song stats") { onDismiss(); show() } }
             onGoToAlbum?.let { go -> SheetAction(Icons.Rounded.Album, "Go to album") { onDismiss(); go() } }
             onGoToArtist?.let { go -> SheetAction(Icons.Rounded.Person, "Go to artist") { onDismiss(); go() } }
             onRemoveFromPlaylist?.let { remove ->

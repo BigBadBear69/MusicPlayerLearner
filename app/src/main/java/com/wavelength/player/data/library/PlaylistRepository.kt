@@ -53,7 +53,7 @@ class PlaylistRepository(private val dao: PlaylistDao) {
         val byPath = library.associateBy { (it.folder + it.fileName).lowercase() }
         val byName = library.groupBy { it.fileName.lowercase() }
         var missing = 0
-        val ids = lines.map { it.trim().removePrefix("﻿") }
+        val ids = lines.map { it.trim().removePrefix("\uFEFF") }
             .filter { it.isNotEmpty() && !it.startsWith("#") }
             .mapNotNull { raw ->
                 val path = Uri.decode(raw.removePrefix("file://")).replace('\\', '/')

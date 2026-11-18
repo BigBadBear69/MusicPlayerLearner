@@ -6,7 +6,11 @@ import android.provider.OpenableColumns
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.wavelength.player.WavelengthApp
+import com.wavelength.player.data.db.PlayEventEntity
 import com.wavelength.player.data.db.SongEntity
+import com.wavelength.player.data.db.SongStatsEntity
+import com.wavelength.player.data.stats.StatsRange
+import com.wavelength.player.data.stats.StatsSnapshot
 import com.wavelength.player.data.library.Album
 import com.wavelength.player.data.library.Artist
 import com.wavelength.player.data.library.Library
@@ -19,6 +23,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -47,6 +52,7 @@ data class PlaylistEntry(val position: Int, val song: SongEntity)
 class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val repo = (app as WavelengthApp).library
     private val playlistRepo = (app as WavelengthApp).playlists
+    private val statsRepo = (app as WavelengthApp).stats
 
     val library: StateFlow<Library?> = repo.library
     val isScanning: StateFlow<Boolean> = repo.isScanning
@@ -158,6 +164,53 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
                     say(if (missing == 0) "Imported \"$name\"" else "Imported \"$name\" ($missing songs not found on this phone)")
                 }
                 .onFailure { say("Import failed: ${it.message}") }
+        }
+    }
+
+    // ---- Stats & favourites ----
+
+    private val _statsRange = MutableStateFlow(StatsRange.Month)
+    val statsRange: StateFlow<StatsRange> = _statsRange.asStateFlow()
+    fun setStatsRange(r: StatsRange) { _statsRange.value = r }
+
+    val stats: StateFlow<StatsSnapshot?> =
+        statsRepo.snapshot(_statsRange, repo.library.map { it?.songs.orEmpty() })
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val recentListens: StateFlow<List<PlayEventEntity>> =
+        statsRepo.recent(300).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    val favoriteIds: StateFlow<Set<Long>> =
+        statsRepo.favoriteIds.stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    /** Per-song totals (all time), for the song details sheet. */
+    val songStats: StateFlow<Map<Long, SongStatsEntity>> =
+        statsRepo.allStats.map { list -> list.associateBy { it.songId } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    fun eventsForSong(songId: Long) = statsRepo.eventsForSong(songId)
+
+    fun toggleFavorite(song: SongEntity) {
+        val fav = song.id !in favoriteIds.value
+        viewModelScope.launch {
+            statsRepo.setFavorite(song.id, fav)
+            say(if (fav) "Added \"${song.title}\" to Favourites" else "Removed \"${song.title}\" from Favourites")
+        }
+    }
+
+    fun exportStats(target: Uri) {
+        val resolver = getApplication<Application>().contentResolver
+        viewModelScope.launch {
+            runCatching { statsRepo.exportCsv(resolver, target, library.value?.songs?.associateBy { it.id }.orEmpty()) }
+                .onSuccess { say("Exported $it listens") }
+                .onFailure { say("Export failed: ${it.message}") }
+        }
+    }
+
+    fun resetStats() {
+        viewModelScope.launch {
+            statsRepo.resetHistory()
+            say("Listening history cleared")
         }
     }
 

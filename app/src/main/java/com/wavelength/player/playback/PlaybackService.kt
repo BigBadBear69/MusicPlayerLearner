@@ -38,6 +38,7 @@ class PlaybackService : MediaSessionService() {
     private lateinit var queueStore: QueueStore
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var saveJob: Job? = null
+    private lateinit var tracker: ListeningTracker
 
     override fun onCreate() {
         super.onCreate()
@@ -54,6 +55,14 @@ class PlaybackService : MediaSessionService() {
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
         SmartShuffleController(player).attach()
+
+        // Every listen goes to the stats database (written on the app scope so it survives the service).
+        val app = application as WavelengthApp
+        tracker = ListeningTracker(player) { l ->
+            app.appScope.launch {
+                runCatching { app.stats.record(l.songId, l.startedAt, l.endedAt, l.listenedMs, l.durationMs, l.endedNaturally, l.replay) }
+            }
+        }.also { it.attach() }
 
         val openApp = PendingIntent.getActivity(
             this, 0,
@@ -94,6 +103,7 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        tracker.flush()
         saveQueue()
         scope.cancel()
         session?.release()
