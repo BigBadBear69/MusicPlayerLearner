@@ -15,6 +15,10 @@ data class AppSettings(
     val shuffleStyle: ShuffleStyle = ShuffleStyle.Smart,
     /** Share of a looping shuffled playlist that must play before a song can repeat (0.3–0.9). */
     val repeatWindow: Double = 0.7,
+    /** Look lyrics up on LRCLIB when they aren't in the file or the lyrics folder. */
+    val lyricsOnline: Boolean = true,
+    /** Folder (picked with the system file picker) holding .lrc files. */
+    val lyricsFolderUri: String? = null,
 )
 
 class SettingsStore(context: Context) {
@@ -27,6 +31,8 @@ class SettingsStore(context: Context) {
         discoverOnline = prefs.getBoolean("discover_online", true),
         shuffleStyle = ShuffleStyle.parse(prefs.getString("shuffle_style", null)),
         repeatWindow = prefs.getFloat("repeat_window", 0.7f).toDouble().coerceIn(0.3, 0.9),
+        lyricsOnline = prefs.getBoolean("lyrics_online", true),
+        lyricsFolderUri = prefs.getString("lyrics_folder", null),
     )
 
     fun update(block: (AppSettings) -> AppSettings) {
@@ -36,6 +42,8 @@ class SettingsStore(context: Context) {
             .putBoolean("discover_online", new.discoverOnline)
             .putString("shuffle_style", new.shuffleStyle.name)
             .putFloat("repeat_window", new.repeatWindow.toFloat())
+            .putBoolean("lyrics_online", new.lyricsOnline)
+            .putString("lyrics_folder", new.lyricsFolderUri)
             .apply()
         _settings.value = new.copy(lastFmApiKey = new.lastFmApiKey.trim())
     }

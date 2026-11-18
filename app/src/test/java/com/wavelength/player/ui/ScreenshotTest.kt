@@ -33,7 +33,7 @@ import kotlin.random.Random
  */
 @RunWith(RobolectricTestRunner::class)
 @GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [36], qualifiers = "w400dp-h1400dp-xxhdpi")
+@Config(sdk = [36], qualifiers = "w400dp-h860dp-xxhdpi")
 class ScreenshotTest {
     @get:Rule val compose = createComposeRule()
 
@@ -168,5 +168,44 @@ class ScreenshotTest {
         compose.onNode(androidx.compose.ui.test.hasText("Playlists")).performClick()
         compose.waitForIdle()
         save("playlists-tab")
+    }
+
+    @Test
+    fun nowPlayingLyrics() {
+        assumeTrue(System.getProperty("screenshots") != null)
+        val lines = com.wavelength.player.data.lyrics.Lrc.parse(
+            (0 until 16).joinToString("\n") { i -> "[00:%02d.00]".format(i * 3) + listOf("City lights are fading out", "I can hear the engine hum", "We were chasing midnight", "Waiting for the sun", "Hold on, hold on", "Don't let the signal go")[i % 6] },
+        )
+        val state = com.wavelength.player.playback.PlayerState(songId = 1, title = "Midnight Drive", artist = "Nova Lane", album = "Signals",
+            isPlaying = true, durationMs = 214_000, shuffle = true, repeatMode = 2, queueSize = 20, speed = 1.25f)
+        val actions = com.wavelength.player.ui.screens.NowPlayingActions({}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
+        compose.setContent {
+            WavelengthTheme {
+                com.wavelength.player.ui.screens.NowPlayingScreen(
+                    state, null, 13_500, isFavorite = true,
+                    lyrics = MainViewModel.LyricsUi.Found(com.wavelength.player.data.lyrics.Lyrics.Synced(lines, "LRCLIB")),
+                    sleep = com.wavelength.player.playback.SleepTimerState(endsAt = System.currentTimeMillis() + 23 * 60_000),
+                    actions = actions,
+                )
+            }
+        }
+        compose.onNode(androidx.compose.ui.test.hasText("Lyrics")).performClick()
+        compose.mainClock.advanceTimeBy(2_000)
+        save("now-playing-lyrics")
+    }
+
+    @Test
+    fun equalizer() {
+        assumeTrue(System.getProperty("screenshots") != null)
+        val info = com.wavelength.player.data.audio.EqInfo(listOf(60, 230, 910, 3600, 14000), -15f, 15f)
+        val eq = com.wavelength.player.data.audio.EqSettings(true, "Rock", com.wavelength.player.data.audio.EqPresets.gains("Rock", info.bandCentersHz, -15f, 15f), 0.3f)
+        compose.setContent {
+            WavelengthTheme {
+                androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                    com.wavelength.player.ui.screens.EqualizerScreen(info, eq, true, {}, {}, { _, _ -> }, {}, {})
+                }
+            }
+        }
+        save("equalizer")
     }
 }

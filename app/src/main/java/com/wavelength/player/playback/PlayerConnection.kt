@@ -28,6 +28,7 @@ data class PlayerState(
     val queueSize: Int = 0,
     /** Queue in play order (respecting shuffle), starting with the current song. */
     val upNext: List<QueueEntry> = emptyList(),
+    val speed: Float = 1f,
 ) {
     val hasSong: Boolean get() = songId != null
 }
@@ -120,6 +121,8 @@ class PlayerConnection(private val context: Context) {
 
     fun clearQueue() = withController { clearMediaItems() }
 
+    fun setSpeed(speed: Float) = withController { setPlaybackSpeed(speed.coerceIn(0.25f, 3f)) }
+
     fun togglePlayPause() = withController { if (isPlaying) pause() else { if (playbackState == Player.STATE_IDLE) prepare(); play() } }
     fun next() = withController { seekToNext() }
     fun previous() = withController { seekToPrevious() }
@@ -148,6 +151,7 @@ class PlayerConnection(private val context: Context) {
             repeatMode = p.repeatMode,
             queueSize = p.mediaItemCount,
             upNext = upNext(p),
+            speed = p.playbackParameters.speed,
         )
     }
 

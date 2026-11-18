@@ -47,6 +47,10 @@ import com.wavelength.player.ui.screens.LibraryScreen
 import com.wavelength.player.ui.screens.NowPlayingScreen
 import com.wavelength.player.ui.screens.PlaylistScreen
 import com.wavelength.player.ui.screens.QueueSheet
+import com.wavelength.player.ui.screens.NowPlayingActions
+import com.wavelength.player.ui.screens.EqualizerScreen
+import com.wavelength.player.ui.components.SleepTimerSheet
+import com.wavelength.player.ui.components.SpeedSheet
 import com.wavelength.player.ui.screens.AddSongsScreen
 import com.wavelength.player.ui.screens.DiscoverActions
 import com.wavelength.player.ui.screens.DiscoverScreen
@@ -83,6 +87,11 @@ fun WavelengthRoot(vm: MainViewModel) {
     var showQueue by remember { mutableStateOf(false) }
     var exporting by remember { mutableStateOf<PlaylistUi?>(null) }
     var statsFor by remember { mutableStateOf<SongEntity?>(null) }
+    var showSleep by remember { mutableStateOf(false) }
+    var showSpeed by remember { mutableStateOf(false) }
+    val lyricsFolderLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        uri?.let(vm::setLyricsFolder)
+    }
     val statsExportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/csv")) { uri ->
         uri?.let(vm::exportStats)
     }
@@ -215,6 +224,22 @@ fun WavelengthRoot(vm: MainViewModel) {
                             onRescan = vm::rescan,
                             onShuffleStyle = vm::setShuffleStyle,
                             onRepeatWindow = vm::setRepeatWindow,
+                            onLyricsOnline = vm::setLyricsOnline,
+                            onPickLyricsFolder = { lyricsFolderLauncher.launch(null) },
+                            onClearLyricsFolder = { vm.setLyricsFolder(null) },
+                            onOpenEqualizer = { nav.navigate("equalizer") },
+                            onBack = { nav.popBackStack() },
+                        )
+                    }
+                }
+                composable("equalizer") {
+                    val info by vm.eqInfo.collectAsStateWithLifecycle()
+                    val eq by vm.eqSettings.collectAsStateWithLifecycle()
+                    val supported by vm.eqSupported.collectAsStateWithLifecycle()
+                    Box(Modifier.statusBarsPadding()) {
+                        EqualizerScreen(
+                            info, eq, supported,
+                            onEnabled = vm::setEqEnabled, onPreset = vm::setEqPreset, onBand = vm::setEqBand, onBass = vm::setBassBoost,
                             onBack = { nav.popBackStack() },
                         )
                     }
@@ -277,19 +302,29 @@ fun WavelengthRoot(vm: MainViewModel) {
                     popExitTransition = { slideOutVertically { it } },
                 ) {
                     LaunchedEffect(player.hasSong) { if (!player.hasSong) nav.popBackStack() }
+                    val lyrics by vm.lyrics.collectAsStateWithLifecycle()
+                    val sleep by vm.sleepTimer.collectAsStateWithLifecycle()
                     NowPlayingScreen(
                         player, currentArt, positionMs,
-                        onCollapse = { nav.popBackStack() },
-                        onPlayPause = vm.player::togglePlayPause,
-                        onNext = vm.player::next,
-                        onPrevious = vm.player::previous,
-                        onSeek = { positionMs = it; vm.player.seekTo(it) },
-                        onToggleShuffle = vm.player::toggleShuffle,
-                        onCycleRepeat = vm.player::cycleRepeat,
-                        onOpenQueue = { showQueue = true },
                         isFavorite = player.songId in favoriteIds,
-                        onToggleFavorite = { player.songId?.let { songsById[it] }?.let(vm::toggleFavorite) },
-                        onShowStats = { statsFor = player.songId?.let { songsById[it] } },
+                        lyrics = lyrics,
+                        sleep = sleep,
+                        actions = NowPlayingActions(
+                            collapse = { nav.popBackStack() },
+                            playPause = vm.player::togglePlayPause,
+                            next = vm.player::next,
+                            previous = vm.player::previous,
+                            seek = { positionMs = it; vm.player.seekTo(it) },
+                            toggleShuffle = vm.player::toggleShuffle,
+                            cycleRepeat = vm.player::cycleRepeat,
+                            openQueue = { showQueue = true },
+                            toggleFavorite = { player.songId?.let { songsById[it] }?.let(vm::toggleFavorite) },
+                            showStats = { statsFor = player.songId?.let { songsById[it] } },
+                            openSleepTimer = { showSleep = true },
+                            openSpeed = { showSpeed = true },
+                            openEqualizer = { nav.navigate("equalizer") },
+                            retryLyrics = vm::retryLyrics,
+                        ),
                     )
                 }
             }
@@ -348,6 +383,11 @@ fun WavelengthRoot(vm: MainViewModel) {
             },
         )
     }
+    if (showSleep) {
+        val sleep by vm.sleepTimer.collectAsStateWithLifecycle()
+        SleepTimerSheet(sleep, vm::sleepIn, vm::sleepAtEndOfSong, vm::extendSleep, vm::cancelSleep) { showSleep = false }
+    }
+    if (showSpeed) SpeedSheet(player.speed, vm::setSpeed) { showSpeed = false }
     statsFor?.let { song ->
         val events by remember(song.id) { vm.eventsForSong(song.id) }.collectAsStateWithLifecycle(emptyList())
         SongStatsSheet(

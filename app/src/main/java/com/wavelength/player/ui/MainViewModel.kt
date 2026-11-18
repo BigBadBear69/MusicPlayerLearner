@@ -29,6 +29,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import com.wavelength.player.data.lyrics.Lyrics
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.Dispatchers
 import com.wavelength.player.data.smart.ShuffleStyle
@@ -65,6 +69,7 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     private val statsRepo = (app as WavelengthApp).stats
     private val discoverRepo = (app as WavelengthApp).discover
     private val settingsStore = (app as WavelengthApp).settings
+    private val wapp = app as WavelengthApp
 
     val library: StateFlow<Library?> = repo.library
     val isScanning: StateFlow<Boolean> = repo.isScanning
@@ -311,6 +316,60 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setRepeatWindow(w: Double) = settingsStore.update { it.copy(repeatWindow = w.coerceIn(0.3, 0.9)) }
+
+    // ---- Lyrics ----
+
+    sealed interface LyricsUi {
+        data object Loading : LyricsUi
+        data object None : LyricsUi
+        data class Found(val lyrics: Lyrics) : LyricsUi
+    }
+
+    private val lyricsRefresh = MutableStateFlow(0)
+
+    /** Lyrics for whatever is playing now. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    val lyrics: StateFlow<LyricsUi> =
+        combine(player.state.map { it.songId }.distinctUntilChanged(), lyricsRefresh) { id, n -> id to n }
+            .flatMapLatest { (id, n) ->
+                flow {
+                    val song = id?.let { library.value?.songs?.find { s -> s.id == it } }
+                    if (song == null) { emit(LyricsUi.None); return@flow }
+                    emit(LyricsUi.Loading)
+                    val l = runCatching { wapp.lyrics.lyrics(song, forceRefresh = n > 0) }.getOrNull()
+                    emit(if (l == null) LyricsUi.None else LyricsUi.Found(l))
+                }
+            }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), LyricsUi.None)
+
+    fun retryLyrics() { lyricsRefresh.value++ }
+    fun setLyricsOnline(on: Boolean) = settingsStore.update { it.copy(lyricsOnline = on) }
+    fun setLyricsFolder(uri: Uri?) {
+        uri?.let {
+            runCatching {
+                getApplication<Application>().contentResolver.takePersistableUriPermission(it, android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+        settingsStore.update { it.copy(lyricsFolderUri = uri?.toString()) }
+        say(if (uri == null) "Lyrics folder removed" else "Lyrics folder set")
+    }
+
+    // ---- Sleep timer, speed, equalizer ----
+
+    val sleepTimer = wapp.sleepTimer.state
+    fun sleepIn(minutes: Int) { wapp.sleepTimer.startMinutes(minutes); say("Sleep timer: pausing in $minutes min") }
+    fun sleepAtEndOfSong() { wapp.sleepTimer.endOfSong(); say("Sleep timer: pausing after this song") }
+    fun extendSleep(minutes: Int) = wapp.sleepTimer.extend(minutes)
+    fun cancelSleep() { wapp.sleepTimer.cancel(); say("Sleep timer off") }
+
+    fun setSpeed(speed: Float) = player.setSpeed(speed)
+
+    val eqInfo = wapp.audioEffects.info
+    val eqSettings = wapp.audioEffects.settings
+    val eqSupported = wapp.audioEffects.supported
+    fun setEqEnabled(on: Boolean) = wapp.audioEffects.update { it.copy(enabled = on) }
+    fun setEqPreset(name: String) = wapp.audioEffects.choosePreset(name)
+    fun setEqBand(index: Int, db: Float) = wapp.audioEffects.setBand(index, db)
+    fun setBassBoost(v: Float) = wapp.audioEffects.update { it.copy(bassBoost = v, enabled = true) }
 
     // ---- Settings ----
 

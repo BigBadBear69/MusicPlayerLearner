@@ -15,8 +15,8 @@ android {
         applicationId = "com.wavelength.player"
         minSdk = 29
         targetSdk = 37
-        versionCode = 5
-        versionName = "0.5.0"
+        versionCode = 6
+        versionName = "0.6.0"
     }
 
     signingConfigs {
@@ -80,6 +80,8 @@ dependencies {
     implementation(libs.coil.compose)
     implementation(libs.coil.network)
     implementation(libs.okhttp)
+    implementation(libs.documentfile)
+    implementation(libs.palette)
     implementation(libs.reorderable)
 
     testImplementation(libs.junit)

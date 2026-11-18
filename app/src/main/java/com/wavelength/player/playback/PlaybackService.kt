@@ -26,9 +26,12 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val FADE_MS = 10_000L
 
 /** Owns the player. Runs in the background and provides the notification and lock-screen controls. */
 @OptIn(UnstableApi::class)
@@ -100,6 +103,44 @@ class PlaybackService : MediaSessionService() {
                 ) scheduleSave()
             }
         })
+        // Equalizer / bass boost follow the player's audio session.
+        app.audioEffects.attach(player.audioSessionId)
+        player.addListener(object : Player.Listener {
+            override fun onAudioSessionIdChanged(audioSessionId: Int) = app.audioEffects.attach(audioSessionId)
+        })
+
+        // Sleep timer: fade out over the last 10 seconds, then pause.
+        scope.launch {
+            app.sleepTimer.state.collectLatest { st ->
+                player.pauseAtEndOfMediaItems = st.endOfSong
+                player.volume = 1f
+                val endsAt = st.endsAt ?: return@collectLatest
+                while (true) {
+                    val left = endsAt - System.currentTimeMillis()
+                    if (left <= 0) break
+                    if (left < FADE_MS) player.volume = (left.toFloat() / FADE_MS).coerceIn(0f, 1f)
+                    delay(if (left < FADE_MS) 200 else minOf(left - FADE_MS + 1, 5_000))
+                }
+                player.pause()
+                player.volume = 1f
+                app.sleepTimer.cancel()
+            }
+        }
+        player.addListener(object : Player.Listener {
+            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+                // "End of song" timer did its job.
+                if (!playWhenReady && reason == Player.PLAY_WHEN_READY_CHANGE_REASON_END_OF_MEDIA_ITEM && app.sleepTimer.state.value.endOfSong) {
+                    app.sleepTimer.cancel()
+                }
+            }
+
+            override fun onEvents(player: Player, events: Player.Events) {
+                if (events.containsAny(Player.EVENT_MEDIA_ITEM_TRANSITION, Player.EVENT_IS_PLAYING_CHANGED, Player.EVENT_MEDIA_METADATA_CHANGED)) {
+                    updateWidget()
+                }
+            }
+        })
+
         // Save the position now and then while playing, so a crash or reboot loses at most a few seconds.
         scope.launch {
             while (isActive) {
@@ -117,6 +158,9 @@ class PlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        (application as WavelengthApp).audioEffects.release()
+        (application as WavelengthApp).sleepTimer.cancel()
+        com.wavelength.player.widget.PlayerWidget.push(this, player.mediaMetadata.title?.toString(), player.mediaMetadata.artist?.toString(), false, widgetArt)
         tracker.flush()
         saveQueue()
         scope.cancel()
@@ -124,6 +168,31 @@ class PlaybackService : MediaSessionService() {
         player.release()
         session = null
         super.onDestroy()
+    }
+
+    private var widgetJob: Job? = null
+    private var widgetArtFor: String? = null
+    private var widgetArt: android.graphics.Bitmap? = null
+
+    /** Pushes the current song to the home-screen widget (if one is placed). */
+    private fun updateWidget() {
+        if (!com.wavelength.player.widget.PlayerWidget.hasWidgets(this)) return
+        val item = player.currentMediaItem
+        val md = player.mediaMetadata
+        val playing = player.isPlaying
+        widgetJob?.cancel()
+        widgetJob = scope.launch {
+            val id = item?.mediaId
+            if (id != widgetArtFor) {
+                widgetArt = withContext(Dispatchers.IO) {
+                    item?.localConfiguration?.uri?.let { runCatching { contentResolver.loadThumbnail(it, android.util.Size(256, 256), null) }.getOrNull() }
+                }
+                widgetArtFor = id
+            }
+            com.wavelength.player.widget.PlayerWidget.push(
+                this@PlaybackService, md.title?.toString(), md.artist?.toString(), playing, widgetArt,
+            )
+        }
     }
 
     private fun scheduleSave() {

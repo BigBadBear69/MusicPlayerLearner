@@ -11,16 +11,18 @@ import androidx.room.RoomDatabase
         SongEntity::class, PlaylistEntity::class, PlaylistSongEntity::class,
         PlayEventEntity::class, SongStatsEntity::class,
         ApiCacheEntity::class, DiscoverItemEntity::class,
+        LyricsEntity::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
-    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4)],
+    autoMigrations = [AutoMigration(from = 1, to = 2), AutoMigration(from = 2, to = 3), AutoMigration(from = 3, to = 4), AutoMigration(from = 4, to = 5)],
 )
 abstract class WavelengthDatabase : RoomDatabase() {
     abstract fun songDao(): SongDao
     abstract fun playlistDao(): PlaylistDao
     abstract fun statsDao(): StatsDao
     abstract fun discoverDao(): DiscoverDao
+    abstract fun lyricsDao(): LyricsDao
 
     companion object {
         fun create(context: Context): WavelengthDatabase =

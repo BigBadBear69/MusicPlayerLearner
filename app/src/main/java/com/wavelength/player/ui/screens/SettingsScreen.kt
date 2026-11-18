@@ -43,6 +43,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -67,6 +68,10 @@ fun SettingsScreen(
     onRescan: () -> Unit,
     onShuffleStyle: (ShuffleStyle) -> Unit,
     onRepeatWindow: (Double) -> Unit,
+    onLyricsOnline: (Boolean) -> Unit,
+    onPickLyricsFolder: () -> Unit,
+    onClearLyricsFolder: () -> Unit,
+    onOpenEqualizer: () -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -97,7 +102,7 @@ fun SettingsScreen(
                 }
             }
             Spacer(Modifier.height(12.dp))
-            var window by remember(settings.repeatWindow) { mutableStateOf(settings.repeatWindow.toFloat()) }
+            var window by remember(settings.repeatWindow) { mutableFloatStateOf(settings.repeatWindow.toFloat()) }
             Text("No-repeat window: ${(window * 100).toInt()}%")
             Text(
                 "When a shuffled playlist loops, a song can't come back until this much of the playlist has played.",
@@ -204,6 +209,34 @@ fun SettingsScreen(
                 "Discover saves music-service answers for a week to stay fast. Clear it to fetch everything fresh.",
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+
+            HorizontalDivider(Modifier.padding(vertical = 24.dp))
+            Text("Sound & lyrics", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.tertiary)
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(onClick = onOpenEqualizer) { Text("Equalizer & bass boost") }
+            Spacer(Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Find lyrics online")
+                    Text(
+                        "When a song has no lyrics in the file or your lyrics folder, look it up on LRCLIB (free, sends only the song's title, artist, album and length).",
+                        style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(12.dp))
+                Switch(checked = settings.lyricsOnline, onCheckedChange = onLyricsOnline)
+            }
+            Spacer(Modifier.height(12.dp))
+            Text("Lyrics folder")
+            Text(
+                if (settings.lyricsFolderUri == null) "Optional: pick a folder with .lrc files named like your songs (e.g. \"My Song.lrc\" next to \"My Song.mp3\")."
+                else "Using: " + Uri.decode(settings.lyricsFolderUri).substringAfterLast(':').ifEmpty { "chosen folder" },
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row {
+                TextButton(onClick = onPickLyricsFolder) { Text(if (settings.lyricsFolderUri == null) "Choose folder" else "Change folder") }
+                if (settings.lyricsFolderUri != null) TextButton(onClick = onClearLyricsFolder) { Text("Remove") }
+            }
 
             HorizontalDivider(Modifier.padding(vertical = 24.dp))
             Text("Library", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.tertiary)

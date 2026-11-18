@@ -11,6 +11,9 @@ import com.wavelength.player.data.library.PlaylistRepository
 import com.wavelength.player.data.stats.StatsRepository
 import com.wavelength.player.data.settings.SettingsStore
 import com.wavelength.player.data.discover.DiscoverRepository
+import com.wavelength.player.data.audio.AudioEffects
+import com.wavelength.player.data.lyrics.LyricsRepository
+import com.wavelength.player.playback.SleepTimer
 import coil3.network.okhttp.OkHttpNetworkFetcherFactory
 import com.wavelength.player.ui.components.AlbumArtFetcher
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +28,9 @@ class WavelengthApp : Application(), SingletonImageLoader.Factory {
     val stats by lazy { StatsRepository(database) }
     val settings by lazy { SettingsStore(this) }
     val discover by lazy { DiscoverRepository(database, settings, appScope) }
+    val audioEffects by lazy { AudioEffects(this) }
+    val sleepTimer = SleepTimer()
+    val lyrics by lazy { LyricsRepository(this, database.lyricsDao(), settings) }
 
     override fun newImageLoader(context: PlatformContext): ImageLoader =
         ImageLoader.Builder(context)
