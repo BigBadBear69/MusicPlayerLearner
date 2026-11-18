@@ -91,8 +91,8 @@ For every song, from your phone or from Spotify, Wavelength records:
 | 2 | ✅ Playlists, queue, smart shuffle and loop | No |
 | 3 | ✅ Listening tracker, Affinity Score, stats | No |
 | 4 | ✅ Discover (Last.fm, with Deezer for previews and as a no-key fallback), thumbs, Wishlist, multi-select "Add songs" for playlists | Last.fm API key, entered in app settings (optional) |
-| 5 | Spotify playback inside Wavelength | Spotify Premium + Spotify Client ID |
-| 6 | Automatic playlists from your library | No |
+| 5 | Spotify playback inside Wavelength (on hold: needs Premium; "Listen on…" covers it for now) | Spotify Premium + Spotify Client ID |
+| 6 | ✅ Automatic playlists from your library + shuffle styles (Random / Smart / Discovery) | No |
 | 7 | Polish: equalizer, sleep timer, lyrics, widget | No |
 
 ## Releases (where the APK appears)

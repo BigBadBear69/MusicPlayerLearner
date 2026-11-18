@@ -29,6 +29,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.Dispatchers
+import com.wavelength.player.data.smart.ShuffleStyle
+import com.wavelength.player.data.smart.SmartPlaylist
+import com.wavelength.player.data.smart.SmartPlaylists
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -288,6 +293,24 @@ class MainViewModel(app: Application) : AndroidViewModel(app) {
     fun removeFromWishlist(key: String) = discoverRepo.removeFromWishlist(key)
 
     fun resolveWishlistCovers(list: List<DiscoverItemEntity>) = discoverRepo.resolveWishlistCovers(list)
+
+    // ---- Smart playlists & shuffle style ----
+
+    val smartPlaylists: StateFlow<List<SmartPlaylist>> =
+        combine(
+            repo.library,
+            statsRepo.allStats,
+            statsRepo.eventsSince(System.currentTimeMillis() - 90 * 86_400_000L),
+        ) { lib, stats, events ->
+            if (lib == null) emptyList() else SmartPlaylists.build(lib.songs, stats.associateBy { it.songId }, events)
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    fun setShuffleStyle(style: ShuffleStyle) {
+        settingsStore.update { it.copy(shuffleStyle = style) }
+        if (player.state.value.shuffle) say("${style.label} shuffle: the rest of the queue was reshuffled")
+    }
+
+    fun setRepeatWindow(w: Double) = settingsStore.update { it.copy(repeatWindow = w.coerceIn(0.3, 0.9)) }
 
     // ---- Settings ----
 

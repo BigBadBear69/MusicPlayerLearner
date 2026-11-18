@@ -32,6 +32,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Slider
+import androidx.compose.foundation.selection.selectable
+import com.wavelength.player.data.smart.ShuffleStyle
+import kotlin.math.roundToInt
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -60,6 +65,8 @@ fun SettingsScreen(
     onDiscoverOnline: (Boolean) -> Unit,
     onClearDiscoverCache: () -> Unit,
     onRescan: () -> Unit,
+    onShuffleStyle: (ShuffleStyle) -> Unit,
+    onRepeatWindow: (Double) -> Unit,
     onBack: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -75,6 +82,36 @@ fun SettingsScreen(
             navigationIcon = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") } },
         )
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp)) {
+            Text("Shuffle", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.tertiary)
+            Spacer(Modifier.height(4.dp))
+            ShuffleStyle.entries.forEach { st ->
+                Row(
+                    Modifier.fillMaxWidth().selectable(selected = st == settings.shuffleStyle, onClick = { onShuffleStyle(st) }).padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(selected = st == settings.shuffleStyle, onClick = { onShuffleStyle(st) })
+                    Column {
+                        Text(st.label)
+                        Text(st.description, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+            }
+            Spacer(Modifier.height(12.dp))
+            var window by remember(settings.repeatWindow) { mutableStateOf(settings.repeatWindow.toFloat()) }
+            Text("No-repeat window: ${(window * 100).toInt()}%")
+            Text(
+                "When a shuffled playlist loops, a song can't come back until this much of the playlist has played.",
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Slider(
+                value = window,
+                onValueChange = { window = (it * 20).roundToInt() / 20f },
+                onValueChangeFinished = { onRepeatWindow(window.toDouble()) },
+                valueRange = 0.3f..0.9f,
+                steps = 11,
+            )
+
+            HorizontalDivider(Modifier.padding(vertical = 24.dp))
             Text("Discover", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.tertiary)
             Spacer(Modifier.height(8.dp))
             Row(verticalAlignment = Alignment.CenterVertically) {

@@ -69,6 +69,8 @@ fun WavelengthRoot(vm: MainViewModel) {
     val route = nav.currentBackStackEntryAsState().value?.destination?.route
     val songsById = remember(library) { library?.songs?.associateBy { it.id }.orEmpty() }
     val favoriteIds by vm.favoriteIds.collectAsStateWithLifecycle()
+    val smartPlaylists by vm.smartPlaylists.collectAsStateWithLifecycle()
+    val appSettings by vm.settings.collectAsStateWithLifecycle()
     val songStats by vm.songStats.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
@@ -104,7 +106,8 @@ fun WavelengthRoot(vm: MainViewModel) {
     }
 
     val currentArt: AlbumArt? = player.songId?.let { songsById[it]?.art() }
-    val showMini = player.hasSong && route != NOW_PLAYING
+    // Hide the mini player on full-screen tasks that have their own bottom bar (e.g. the "Add songs" button).
+    val showMini = player.hasSong && route !in setOf(NOW_PLAYING, "playlist/{id}/add", "settings")
     val listPadding = PaddingValues(bottom = if (showMini) 96.dp else 16.dp)
 
     val actions = LibraryActions(
@@ -116,6 +119,7 @@ fun WavelengthRoot(vm: MainViewModel) {
         openDiscover = { nav.navigate("discover") },
         openSettings = { nav.navigate("settings") },
         openFavorites = { nav.navigate("favorites") },
+        openSmart = { nav.navigate("smart/$it") },
         importPlaylist = { importLauncher.launch(arrayOf("audio/x-mpegurl", "audio/mpegurl", "application/vnd.apple.mpegurl", "application/x-mpegurl", "*/*")) },
         openAlbum = { nav.navigate("album/$it") },
         openArtist = { nav.navigate("artist/${Uri.encode(it)}") },
@@ -129,7 +133,7 @@ fun WavelengthRoot(vm: MainViewModel) {
                 composable("library") {
                     Box(Modifier.statusBarsPadding()) {
                         LibraryScreen(
-                            library, playlists, favoriteIds.size, isScanning, player.songId, query, results,
+                            library, playlists, smartPlaylists, favoriteIds.size, isScanning, player.songId, query, results,
                             vm::setQuery, vm::rescan, actions, listPadding,
                         )
                     }
@@ -209,6 +213,8 @@ fun WavelengthRoot(vm: MainViewModel) {
                             onDiscoverOnline = vm::setDiscoverOnline,
                             onClearDiscoverCache = vm::clearDiscoverCache,
                             onRescan = vm::rescan,
+                            onShuffleStyle = vm::setShuffleStyle,
+                            onRepeatWindow = vm::setRepeatWindow,
                             onBack = { nav.popBackStack() },
                         )
                     }
@@ -227,6 +233,16 @@ fun WavelengthRoot(vm: MainViewModel) {
                             onReset = vm::resetStats,
                             onBack = { nav.popBackStack() },
                             contentPadding = listPadding,
+                        )
+                    }
+                }
+                composable("smart/{id}") { entry ->
+                    val id = entry.arguments?.getString("id")
+                    val smart = smartPlaylists.find { it.id == id } ?: return@composable
+                    Box(Modifier.statusBarsPadding()) {
+                        CollectionScreen(
+                            smart.name, smart.description, smart.songs, smart.songs.firstOrNull()?.art(), false,
+                            player.songId, actions.play, actions.more, onBack = { nav.popBackStack() }, contentPadding = listPadding,
                         )
                     }
                 }
@@ -352,6 +368,8 @@ fun WavelengthRoot(vm: MainViewModel) {
             onJump = vm.player::jumpTo,
             onRemove = vm.player::removeFromQueue,
             onDismiss = { showQueue = false },
+            shuffleStyle = appSettings.shuffleStyle,
+            onShuffleStyle = vm::setShuffleStyle,
         )
     }
 }

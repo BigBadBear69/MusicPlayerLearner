@@ -18,6 +18,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.GraphicEq
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.foundation.layout.Arrangement
+import com.wavelength.player.data.smart.ShuffleStyle
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,6 +48,8 @@ fun QueueSheet(
     onJump: (Int) -> Unit,
     onRemove: (Int) -> Unit,
     onDismiss: () -> Unit,
+    shuffleStyle: ShuffleStyle,
+    onShuffleStyle: (ShuffleStyle) -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(Modifier.fillMaxHeight(0.85f).navigationBarsPadding()) {
@@ -57,6 +62,23 @@ fun QueueSheet(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
+            Text(
+                "Shuffle style",
+                Modifier.padding(start = 20.dp, top = 8.dp),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Row(Modifier.padding(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ShuffleStyle.entries.forEach { st ->
+                    FilterChip(selected = st == shuffleStyle, onClick = { onShuffleStyle(st) }, label = { Text(st.label) })
+                }
+            }
+            Text(
+                shuffleStyle.description + if (!shuffle) " (turn on shuffle to use it)" else "",
+                Modifier.padding(start = 20.dp, end = 20.dp, bottom = 8.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
             LazyColumn {
                 itemsIndexed(upNext, key = { _, e -> e.index }) { i, entry ->
                     val song = songsById[entry.songId] ?: return@itemsIndexed

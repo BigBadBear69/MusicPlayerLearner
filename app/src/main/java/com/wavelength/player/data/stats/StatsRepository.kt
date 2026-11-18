@@ -33,6 +33,7 @@ class StatsRepository(private val db: WavelengthDatabase) {
     val favoriteIds: Flow<Set<Long>> = allStats.map { list -> list.filter { it.favorite }.sortedByDescending { it.favoritedAt }.mapTo(LinkedHashSet()) { it.songId } }
 
     fun recent(limit: Int = 300) = dao.observeRecent(limit)
+    fun eventsSince(from: Long) = dao.observeEventsSince(from)
     fun eventsForSong(songId: Long) = dao.observeForSong(songId, 200)
 
     /** Saves one listen and updates the song's totals and affinity. */

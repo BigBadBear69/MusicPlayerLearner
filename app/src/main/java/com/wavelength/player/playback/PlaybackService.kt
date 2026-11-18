@@ -54,10 +54,24 @@ class PlaybackService : MediaSessionService() {
             .setHandleAudioBecomingNoisy(true) // pause when headphones are unplugged
             .setWakeMode(C.WAKE_MODE_LOCAL)
             .build()
-        SmartShuffleController(player).attach()
+        val shuffle = SmartShuffleController(player).also { it.attach() }
 
         // Every listen goes to the stats database (written on the app scope so it survives the service).
         val app = application as WavelengthApp
+
+        // Shuffle style + no-repeat window come from Settings; weights use the latest listening stats.
+        var statsById: Map<Long, com.wavelength.player.data.db.SongStatsEntity> = emptyMap()
+        scope.launch { app.stats.allStats.collect { list -> statsById = list.associateBy { it.songId } } }
+        scope.launch {
+            var previous: Pair<com.wavelength.player.data.smart.ShuffleStyle, Double>? = null
+            app.settings.settings.collect { s ->
+                shuffle.repeatWindow = s.repeatWindow
+                shuffle.weightFor = { id -> s.shuffleStyle.weight(statsById[id], System.currentTimeMillis()) }
+                val now = s.shuffleStyle to s.repeatWindow
+                if (previous != null && previous != now) shuffle.reshuffleIfShuffling()
+                previous = now
+            }
+        }
         tracker = ListeningTracker(player) { l ->
             app.appScope.launch {
                 runCatching { app.stats.record(l.songId, l.startedAt, l.endedAt, l.listenedMs, l.durationMs, l.endedNaturally, l.replay) }

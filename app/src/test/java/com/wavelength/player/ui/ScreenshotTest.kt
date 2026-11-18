@@ -149,4 +149,24 @@ class ScreenshotTest {
         compose.onAllNodes(androidx.compose.ui.test.hasClickAction())[10].performClick()
         save("add-songs")
     }
+
+    @Test
+    fun playlistsTab() {
+        assumeTrue(System.getProperty("screenshots") != null)
+        val (events, stats) = fakeData()
+        val now = System.currentTimeMillis()
+        val smart = com.wavelength.player.data.smart.SmartPlaylists.build(songs, stats.associateBy { it.songId }, events.map { it.copy(startedAt = minOf(it.startedAt, now)) }, now)
+        val lib = com.wavelength.player.data.library.Library.from(songs)
+        val actions = com.wavelength.player.ui.screens.LibraryActions({ _, _, _ -> }, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {})
+        compose.setContent {
+            WavelengthTheme {
+                androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                    com.wavelength.player.ui.screens.LibraryScreen(lib, emptyList(), smart, 4, false, null, "", SearchResults(), {}, {}, actions, PaddingValues())
+                }
+            }
+        }
+        compose.onNode(androidx.compose.ui.test.hasText("Playlists")).performClick()
+        compose.waitForIdle()
+        save("playlists-tab")
+    }
 }

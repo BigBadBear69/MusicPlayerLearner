@@ -17,8 +17,11 @@ import androidx.media3.exoplayer.ExoPlayer
 @UnstableApi
 class SmartShuffleController(private val player: ExoPlayer) : Player.Listener {
 
-    /** Optional per-song weighting (song id → weight); filled in by the learning features later. */
+    /** Per-song weighting (song id → weight), from the chosen shuffle style. */
     var weightFor: (Long) -> Double = { 1.0 }
+
+    /** Share of the queue that must play before a song may repeat. */
+    var repeatWindow: Double = SmartShuffle.DEFAULT_REPEAT_WINDOW
 
     fun attach() {
         player.setShuffleOrder(ListShuffleOrder(IntArray(0)))
@@ -44,6 +47,11 @@ class SmartShuffleController(private val player: ExoPlayer) : Player.Listener {
         reshuffle(lastPlayedAgo = ago)
     }
 
+    /** Re-plans the rest of the queue (after the shuffle style changes). Keeps the current song playing. */
+    fun reshuffleIfShuffling() {
+        if (player.shuffleModeEnabled) reshuffle(lastPlayedAgo = null)
+    }
+
     /** Shuffles the queue with the current song first. */
     fun reshuffle(lastPlayedAgo: IntArray?) {
         val count = player.mediaItemCount
@@ -56,6 +64,7 @@ class SmartShuffleController(private val player: ExoPlayer) : Player.Listener {
             artists = artists,
             first = current,
             lastPlayedAgo = lastPlayedAgo,
+            repeatWindow = repeatWindow,
             weight = { i -> player.getMediaItemAt(i).mediaId.toLongOrNull()?.let(weightFor) ?: 1.0 },
         )
         player.setShuffleOrder(ListShuffleOrder(order))

@@ -31,6 +31,15 @@ import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.DarkMode
+import androidx.compose.material.icons.rounded.Diamond
+import androidx.compose.material.icons.rounded.GraphicEq
+import androidx.compose.material.icons.rounded.History
+import androidx.compose.material.icons.rounded.NewReleases
+import androidx.compose.material.icons.rounded.NightsStay
+import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.WbSunny
+import androidx.compose.material.icons.rounded.WbTwilight
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Favorite
@@ -81,6 +90,7 @@ import com.wavelength.player.data.library.Album
 import com.wavelength.player.data.library.Artist
 import com.wavelength.player.data.library.Library
 import com.wavelength.player.ui.PlaylistUi
+import com.wavelength.player.data.smart.SmartPlaylist
 import com.wavelength.player.ui.SearchResults
 import com.wavelength.player.ui.components.SongMenu
 import com.wavelength.player.ui.components.ArtImage
@@ -103,6 +113,7 @@ class LibraryActions(
     val openDiscover: () -> Unit,
     val openSettings: () -> Unit,
     val openFavorites: () -> Unit,
+    val openSmart: (String) -> Unit,
     val importPlaylist: () -> Unit,
     val openAlbum: (Long) -> Unit,
     val openArtist: (String) -> Unit,
@@ -116,6 +127,7 @@ private enum class LibraryTab(val label: String) { Playlists("Playlists"), Songs
 fun LibraryScreen(
     library: Library?,
     playlists: List<PlaylistUi>,
+    smartPlaylists: List<SmartPlaylist>,
     favoritesCount: Int,
     isScanning: Boolean,
     currentSongId: Long?,
@@ -188,7 +200,7 @@ fun LibraryScreen(
                 }
                 HorizontalPager(pager, Modifier.fillMaxSize(), beyondViewportPageCount = 1) { page ->
                     when (LibraryTab.entries[page]) {
-                        LibraryTab.Playlists -> PlaylistsTab(playlists, favoritesCount, actions, contentPadding)
+                        LibraryTab.Playlists -> PlaylistsTab(playlists, smartPlaylists, favoritesCount, actions, contentPadding)
                         LibraryTab.Songs -> SongsTab(library.songs, currentSongId, actions, contentPadding)
                         LibraryTab.Albums -> AlbumGrid(library.albums, actions.openAlbum, contentPadding)
                         LibraryTab.Artists -> LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
@@ -289,10 +301,28 @@ private fun SongsTab(songs: List<SongEntity>, currentSongId: Long?, actions: Lib
     }
 }
 
+private fun smartIcon(id: String) = when {
+    id == "wavelength" -> Icons.Rounded.GraphicEq
+    id == "gems" -> Icons.Rounded.Diamond
+    id == "rediscover" -> Icons.Rounded.History
+    id == "never" -> Icons.Rounded.NewReleases
+    id == "graveyard" -> Icons.Rounded.SkipNext
+    id.endsWith("night") -> Icons.Rounded.DarkMode
+    id.endsWith("morning") -> Icons.Rounded.WbTwilight
+    id.endsWith("evening") -> Icons.Rounded.NightsStay
+    else -> Icons.Rounded.WbSunny
+}
+
 fun SongEntity.menu() = SongMenu(listOf(this), title, "$artist · $album", art())
 
 @Composable
-private fun PlaylistsTab(playlists: List<PlaylistUi>, favoritesCount: Int, actions: LibraryActions, contentPadding: PaddingValues) {
+private fun PlaylistsTab(
+    playlists: List<PlaylistUi>,
+    smart: List<SmartPlaylist>,
+    favoritesCount: Int,
+    actions: LibraryActions,
+    contentPadding: PaddingValues,
+) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = contentPadding) {
         item {
             ListRow("Favourites", "${songCount(favoritesCount)} · tap ♥ on Now Playing to add", actions.openFavorites) {
@@ -300,6 +330,15 @@ private fun PlaylistsTab(playlists: List<PlaylistUi>, favoritesCount: Int, actio
             }
             ListRow("New playlist", "Start an empty playlist", actions.newPlaylist) { IconTile(Icons.Rounded.Add) }
             ListRow("Import playlist", "From an .m3u or .m3u8 file", actions.importPlaylist) { IconTile(Icons.Rounded.FileDownload) }
+        }
+        if (smart.isNotEmpty()) {
+            item { SectionHeader("Made for you") }
+            items(smart, key = { "smart-" + it.id }) { p ->
+                ListRow(p.name, if (p.songs.isEmpty()) "Not enough listening yet · ${p.description}" else "${songCount(p.songs.size)} · ${p.description}", { actions.openSmart(p.id) }) {
+                    IconTile(smartIcon(p.id))
+                }
+            }
+            item { SectionHeader("Your playlists") }
         }
         if (playlists.isEmpty()) item { EmptyNote("No playlists yet. Create one, or tap ⋮ on any song and choose \"Add to playlist\".") }
         items(playlists, key = { it.id }) { p ->
